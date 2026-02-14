@@ -1,8 +1,9 @@
 from abc import ABC, abstractmethod
 from core.objective_function import ObjectiveFunction
-from typing import Optional
+from typing import Optional, Callable
 import time
 import numpy as np
+
 
 class Optimizer(ABC):
     def __init__(self):
@@ -20,8 +21,8 @@ class Optimizer(ABC):
     def step(
         self,
         x: np.ndarray,
-        grad: np.ndarray,
-        hess: Optional[np.ndarray] = None) -> np.ndarray:
+        grad_fn: Callable,
+        hess: Optional[Callable] | None = None) -> np.ndarray:
         pass
 
 
@@ -63,6 +64,6 @@ def optimize(
         except NotImplementedError:
             hess = None            
 
-        x = optimizer.step(x, grad, hess)
+        x = optimizer.step(x, func.grad, func.hess)
 
     return x, history

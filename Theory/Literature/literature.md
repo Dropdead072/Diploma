@@ -13,3 +13,6 @@
     - [SGD CONVERGES TO GLOBAL MINIMUM IN DEEP LEARNING VIA STAR-CONVEX PATH](https://openreview.net/pdf?id=BylIciRcYQ)
 
 - [Sign-SGD is the Golden Gate between Multi-Node to Single-Node Learning: Significant Boost via Parameter-Free Optimization](https://www.researchgate.net/publication/392407322_Sign-SGD_is_the_Golden_Gate_between_Multi-Node_to_Single-Node_Learning_Significant_Boost_via_Parameter-Free_Optimization)
+
+- [Memory-Efficient Optimization by Reducing State Overhead](https://www.alphaxiv.org/abs/2411.07837?chatId=019c5cd0-a445-7dbb-8275-b7f5fc32593b)
+
