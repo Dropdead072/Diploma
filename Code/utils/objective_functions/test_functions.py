@@ -2,6 +2,32 @@ import numpy as np
 from core.objective_function import ObjectiveFunction
 
 
+class Himmelblau(ObjectiveFunction):
+
+    @property
+    def name(self):
+        return "Himmelblau"
+    
+    @property
+    def bounds(self):
+        return ((-10, 10), (-10, 10))
+    
+    def value(self, x):
+        return (x[0]**2 + x[1] - 11)**2 + (x[0] + x[1]**2 - 7)**2
+    
+    def grad(self, x):
+        dx = 4*x[0] * (x[0]**2 + x[1] - 11) + 2*(x[0] + x[1]**2 - 7)
+        dy = 2*( x[0]**2 + x[1] - 11 ) + 4*x[1]*(x[0] + x[1]**2 - 7)
+        return np.array([dx, dy])
+    
+    def hess(self, x):
+        return np.array([
+            [12*x[0]**2 + 4*x[1] -42, 4*x[0]+4*x[1]],
+            [4*x[0]+4*x[1], 4*x[0] + 12*x[1]**2 - 26]
+        ])
+
+
+
 class Rosenbrock(ObjectiveFunction):
 
     @property

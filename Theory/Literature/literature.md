@@ -16,3 +16,4 @@
 
 - [Memory-Efficient Optimization by Reducing State Overhead](https://www.alphaxiv.org/abs/2411.07837?chatId=019c5cd0-a445-7dbb-8275-b7f5fc32593b)
 
+- [Original RMSProp](https://www.cs.toronto.edu/~tijmen/csc321/slides/lecture_slides_lec6.pdf)

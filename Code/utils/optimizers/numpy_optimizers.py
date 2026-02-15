@@ -2,7 +2,7 @@ import numpy as np
 from core.optimizer import Optimizer
 from typing import Callable
 
-
+# Vanila Gradient Descent
 class GradientDescent(Optimizer):
     def __init__(self, lr: float =1e-3):
         '''
@@ -23,7 +23,7 @@ class GradientDescent(Optimizer):
         self.iterations += 1
         return x - self.lr * grad
     
-
+# Momentum
 class GradientDescentWithMomentum(Optimizer):
     def __init__(self, lr: float =1e-3, momentum_coef: float =0.9):
         '''
@@ -68,6 +68,31 @@ class NesterovMomentum(Optimizer):
         if self.momentum is None:
             self.momentum = np.zeros_like(x)
 
-        self.momentum = self.momentum_coef * self.momentum + grad_fn(x - self.momentum_coef * self.momentum)
+        old_momentum = self.momentum
+        x_pred = x - self.momentum_coef * old_momentum
+
+        self.momentum = self.momentum_coef * old_momentum + grad_fn(x_pred)
         return x - self.lr * self.momentum
 
+# Newtons Second Order
+
+class NewtonsMethod(Optimizer):
+    def __init__(self, lr: float = 1e-3):
+        super().__init__()
+        self.lr = lr
+
+    @property
+    def name(self):
+        return "Newton's Method"
+    
+    def step(self, x, grad_fn: Callable[[np.ndarray], np.ndarray], hess=Callable[[np.ndarray], np.ndarray]):
+        try:
+            hessian = hess(x)
+            grad = grad_fn(x)
+        except:
+            raise NotImplementedError
+        
+        return x - self.lr * np.linalg.inv(hessian) @ grad
+    
+
+# Quasi Newton
