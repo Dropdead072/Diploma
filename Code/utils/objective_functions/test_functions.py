@@ -104,7 +104,7 @@ class LevyN13(ObjectiveFunction):
         )
 
     def grad(self, x):
-        # Аналитический градиент громоздкий → численный
+        # Analytical gradient is cumbersome -> ?????????
         eps = 1e-6
         grad = np.zeros_like(x)
         for i in range(2):
@@ -158,7 +158,7 @@ class Ackley(ObjectiveFunction):
         )
 
     def grad(self, x):
-        # Численный градиент (стандарт для Ackley)
+        # Numerical gradient (standard for Ackley)
         eps = 1e-6
         grad = np.zeros_like(x)
         for i in range(2):
