@@ -12,8 +12,13 @@ Run:
 
 from __future__ import annotations
 
-import argparse
 import os
+
+# GPU configuration -- must be set before torch is imported.
+os.environ.setdefault("CUDA_DEVICE_ORDER", "PCI_BUS_ID")
+os.environ.setdefault("CUDA_VISIBLE_DEVICES", "2")
+
+import argparse
 import sys
 
 import torch
@@ -59,23 +64,30 @@ def build_model(seed: int = 0):
 # Data
 # ---------------------------------------------------------------------------
 
-def get_loaders(batch_size: int, data_root: str, num_workers: int = 2):
-    from torchvision import datasets, transforms
+def get_loaders(batch_size: int, cache_dir: str | None = None, num_workers: int = 2):
+    """Load Fashion-MNIST from HuggingFace ``datasets``."""
+    from datasets import load_dataset
+    from torchvision import transforms
 
     tfm = transforms.Compose([
         transforms.ToTensor(),
         transforms.Normalize((0.2860,), (0.3530,)),
     ])
-    train_ds = datasets.FashionMNIST(data_root, train=True, download=True, transform=tfm)
-    test_ds = datasets.FashionMNIST(data_root, train=False, download=True, transform=tfm)
+    raw = load_dataset("zalando-datasets/fashion_mnist", cache_dir=cache_dir)
+
+    def collate(batch):
+        xs = torch.stack([tfm(item["image"].convert("L")) for item in batch])
+        ys = torch.tensor([item["label"] for item in batch], dtype=torch.long)
+        return xs, ys
 
     train_loader = DataLoader(
-        train_ds, batch_size=batch_size, shuffle=True,
+        raw["train"], batch_size=batch_size, shuffle=True,
         num_workers=num_workers, pin_memory=True, drop_last=True,
+        collate_fn=collate,
     )
     test_loader = DataLoader(
-        test_ds, batch_size=512, shuffle=False,
-        num_workers=num_workers, pin_memory=True,
+        raw["test"], batch_size=512, shuffle=False,
+        num_workers=num_workers, pin_memory=True, collate_fn=collate,
     )
     return train_loader, test_loader
 
@@ -135,7 +147,8 @@ def build_suite(n_samples: int, include_hessian: bool):
 
 def main():
     parser = argparse.ArgumentParser(description="MLP / Fashion-MNIST optimizer benchmark")
-    parser.add_argument("--data-root", default="./data", type=str)
+    parser.add_argument("--cache-dir", default=None, type=str,
+                        help="HuggingFace datasets cache directory")
     parser.add_argument("--batch-size", default=128, type=int)
     parser.add_argument("--max-steps", default=500, type=int)
     parser.add_argument("--log-every", default=10, type=int)
@@ -150,7 +163,7 @@ def main():
     )
     print(f"Device: {device}")
 
-    train_loader, test_loader = get_loaders(args.batch_size, args.data_root)
+    train_loader, test_loader = get_loaders(args.batch_size, args.cache_dir)
     eval_fn = make_eval_fn(test_loader, device)
     loss_fn = nn.CrossEntropyLoss()
     n_samples = len(train_loader.dataset)

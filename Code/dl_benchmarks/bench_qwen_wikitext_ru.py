@@ -1,12 +1,21 @@
 """
 Benchmark the scalable custom PyTorch optimizers on Qwen/Qwen2.5-0.5B for
-Russian-language causal-LM fine-tuning.
+Russian-language Supervised Fine-Tuning (SFT) only.
+
+Stage
+-----
+This script runs ONLY the SFT (next-token cross-entropy) stage on raw
+Russian text.  No instruction tuning, RLHF, or preference optimisation is
+performed.
 
 Dataset
 -------
-By default we use a Russian WikiText-2-style stream built from a small slice
-of ``wikimedia/wikipedia`` (Russian).  You can substitute any local file:
-just pass ``--data-file <path>`` with one paragraph per line.
+Russian WikiText-2-style corpus is loaded directly from HuggingFace
+``datasets`` (default: a slice of ``wikimedia/wikipedia`` Russian dump,
+mirroring the WikiText-2 chunking protocol).  Alternative HF datasets can
+be selected with ``--hf-dataset``/``--hf-config``/``--hf-split``.
+A local text file (one paragraph per line) is also supported via
+``--data-file``.
 
 Optimizers
 ----------
@@ -26,9 +35,14 @@ Run:
 
 from __future__ import annotations
 
+import os
+
+# GPU configuration -- must be set before torch is imported.
+os.environ.setdefault("CUDA_DEVICE_ORDER", "PCI_BUS_ID")
+os.environ.setdefault("CUDA_VISIBLE_DEVICES", "2")
+
 import argparse
 import json
-import os
 import sys
 from typing import Optional
 
@@ -83,10 +97,22 @@ class CausalLMTextDataset(Dataset):
         return x, x.clone()  # labels == input_ids
 
 
-def load_paragraphs(data_file: Optional[str], n_articles: int = 500):
+def load_paragraphs(
+    data_file: Optional[str],
+    hf_dataset: str = "wikimedia/wikipedia",
+    hf_config: Optional[str] = "20231101.ru",
+    hf_split: str = "train",
+    text_column: str = "text",
+    n_articles: int = 500,
+    cache_dir: Optional[str] = None,
+):
     """
-    Either load paragraphs from a user-supplied file (one paragraph per line)
-    or pull a small slice of the Russian Wikipedia (mirrors WikiText-2 spirit).
+    Load a list of paragraphs for SFT.
+
+    Priority:
+      1. ``--data-file <path>`` (one paragraph per line) if provided.
+      2. HuggingFace ``datasets`` (streaming) -- defaults to a small slice
+         of the Russian Wikipedia dump.
     """
     if data_file is not None:
         with open(data_file, encoding="utf-8") as f:
@@ -97,21 +123,27 @@ def load_paragraphs(data_file: Optional[str], n_articles: int = 500):
         from datasets import load_dataset
     except ImportError as e:
         raise ImportError(
-            "Install `datasets` or pass --data-file with one paragraph per line."
+            "Install `datasets` (`pip install datasets`) or pass --data-file."
         ) from e
 
-    print("Downloading a small slice of Russian Wikipedia...")
-    # Streaming mode + take(n) avoids downloading the full Russian dump
-    ds = load_dataset("wikimedia/wikipedia", "20231101.ru", split="train", streaming=True)
+    print(f"Loading {hf_dataset}"
+          f"{f' ({hf_config})' if hf_config else ''}"
+          f" split={hf_split} from HuggingFace...")
+    if hf_config:
+        ds = load_dataset(hf_dataset, hf_config, split=hf_split,
+                          streaming=True, cache_dir=cache_dir)
+    else:
+        ds = load_dataset(hf_dataset, split=hf_split,
+                          streaming=True, cache_dir=cache_dir)
     paragraphs = []
     for i, row in enumerate(ds):
         if i >= n_articles:
             break
-        # Take the lead paragraph (first 800 chars) of each article
-        text = row.get("text", "").strip()
+        text = (row.get(text_column) or "").strip()
         if not text:
             continue
-        paragraphs.append(text[:800])
+        # Cap each entry to keep memory bounded; chunking happens later.
+        paragraphs.append(text[:2000])
     return paragraphs
 
 
@@ -217,12 +249,22 @@ def build_suite():
 # ---------------------------------------------------------------------------
 
 def main():
-    parser = argparse.ArgumentParser(description="Qwen2.5-0.5B / Russian WikiText optimizer benchmark")
+    parser = argparse.ArgumentParser(
+        description="Qwen2.5-0.5B SFT-only optimizer benchmark on Russian WikiText"
+    )
     parser.add_argument("--data-file", default=None,
                         help="Optional local text file (one paragraph per line). "
-                             "If omitted, a small Russian Wikipedia slice is used.")
+                             "If omitted, the HF dataset is used.")
+    parser.add_argument("--hf-dataset", default="wikimedia/wikipedia",
+                        help="HuggingFace dataset name (default: Russian Wikipedia)")
+    parser.add_argument("--hf-config", default="20231101.ru",
+                        help="HuggingFace dataset config / language")
+    parser.add_argument("--hf-split", default="train")
+    parser.add_argument("--text-column", default="text")
+    parser.add_argument("--cache-dir", default=None,
+                        help="HuggingFace datasets cache directory")
     parser.add_argument("--n-articles", default=500, type=int,
-                        help="Number of Wikipedia paragraphs to use when streaming")
+                        help="Number of paragraphs/articles to stream from HF")
     parser.add_argument("--block-size", default=256, type=int)
     parser.add_argument("--batch-size", default=2, type=int)
     parser.add_argument("--max-steps", default=200, type=int)
@@ -251,7 +293,15 @@ def main():
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
-    paragraphs = load_paragraphs(args.data_file, n_articles=args.n_articles)
+    paragraphs = load_paragraphs(
+        args.data_file,
+        hf_dataset=args.hf_dataset,
+        hf_config=args.hf_config,
+        hf_split=args.hf_split,
+        text_column=args.text_column,
+        n_articles=args.n_articles,
+        cache_dir=args.cache_dir,
+    )
     print(f"Loaded {len(paragraphs)} paragraphs.")
     dataset = CausalLMTextDataset(paragraphs, tokenizer, block_size=args.block_size)
     print(f"Built {len(dataset)} blocks of {args.block_size} tokens each.")
